@@ -1,0 +1,129 @@
+This demo will show you how to train a machine learning model, track its parameters, metrics, and the model itself using MLflow, and then load the model back for prediction. We'll use a simple scikit-learn ElasticNet model.
+You can copy and paste these code blocks directly into the cells of a new Databricks notebook.
+
+Step 1: Install Libraries
+
+First, let's make sure the necessary libraries, scikit-learn and mlflow, are installed on our cluster.
+
+Python
+
+
+%pip install scikit-learn mlflow
+
+
+
+Step 2: Prepare the Data
+
+We'll create a simple, synthetic dataset for our regression task. This avoids the need to upload any files.
+
+Python
+
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import make_regression
+
+# Generate a synthetic dataset
+X, y = make_regression(n_features=4, n_informative=2, random_state=0, shuffle=False)
+
+# Split data into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Create pandas DataFrames for easier handling
+train_df = pd.DataFrame(X_train, columns=[f'feature_{i+1}' for i in range(X.shape[1])])
+train_df['target'] = y_train
+test_df = pd.DataFrame(X_test, columns=[f'feature_{i+1}' for i in range(X.shape[1])])
+test_df['target'] = y_test
+
+print("Training data is ready.")
+
+
+
+Step 3: Create and Run the MLflow Experiment
+
+This is the core of the demo. We'll create a function that trains an ElasticNet model. Inside this function, we'll use MLflow to log everything. Databricks automatically manages the MLflow server setup for you.
+
+Python
+
+
+import mlflow
+from sklearn.linear_model import ElasticNet
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import numpy as np
+
+# Set an experiment name. If it doesn't exist, MLflow creates it.
+mlflow.set_experiment("/Users/your_email@domain.com/mlflow-demo")
+
+# Define a function to train the model and log with MLflow
+def train_elastic_net(alpha, l1_ratio):
+  # Start an MLflow run. Everything within this 'with' block will be logged.
+  with mlflow.start_run():
+    # 1. Log Hyperparameters
+    mlflow.log_param("alpha", alpha)
+    mlflow.log_param("l1_ratio", l1_ratio)
+
+    # 2. Train the Model
+    model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, random_state=42)
+    model.fit(X_train, y_train)
+
+    # 3. Make Predictions & Evaluate
+    predictions = model.predict(X_test)
+    rmse = np.sqrt(mean_squared_error(y_test, predictions))
+    mae = mean_absolute_error(y_test, predictions)
+    r2 = r2_score(y_test, predictions)
+
+    # 4. Log Metrics
+    print(f"Metrics for alpha={alpha}, l1_ratio={l1_ratio}: RMSE={rmse:.2f}, R2={r2:.2f}")
+    mlflow.log_metric("rmse", rmse)
+    mlflow.log_metric("mae", mae)
+    mlflow.log_metric("r2", r2)
+
+    # 5. Log the Model as an Artifact
+    mlflow.sklearn.log_model(model, "elastic-net-model")
+
+# Let's run the training function with different hyperparameters to create multiple runs
+train_elastic_net(alpha=0.3, l1_ratio=0.3)
+train_elastic_net(alpha=0.5, l1_ratio=0.5)
+train_elastic_net(alpha=0.7, l1_ratio=0.8)
+
+
+
+Step 4: View the Results in the MLflow UI
+
+After running the cell above, you will see a link to the Experiment in the output.
+Click the "Experiment" icon (it looks like a beaker 🧪) on the right side of your notebook.
+A sidebar will open showing your runs. Click the "Go to Experiment UI" icon (an arrow pointing out of a box) to open the full MLflow UI in a new tab.
+In the UI, you can:
+See a table with all your runs.
+Compare the logged parameters (alpha, l1_ratio) and metrics (RMSE, R2) for each run.
+Click on any run to see more details, including the saved model in the Artifacts section.
+
+Step 5: Load and Use the Best Model
+
+Now, let's pretend we've analyzed the runs in the UI and decided which one is best (e.g., the one with the lowest RMSE). We can now load that specific model back from MLflow to make new predictions.
+In the MLflow UI, click on the run you want to use.
+In the Artifacts section, find the elastic-net-model folder.
+Copy the Run ID from the top of the page.
+Now, use that Run ID in the code below to load the model.
+
+Python
+
+
+# Replace 'YOUR_RUN_ID' with the actual Run ID from the MLflow UI
+run_id = 'YOUR_RUN_ID'
+
+# Construct the model URI
+logged_model_uri = f"runs:/{run_id}/elastic-net-model"
+
+# Load the model as a generic Python function
+loaded_model = mlflow.pyfunc.load_model(logged_model_uri)
+
+# Use the loaded model to predict on new data
+new_data = X_test[:5] # Using first 5 rows of test data as an example
+predictions = loaded_model.predict(pd.DataFrame(new_data))
+
+print("Predictions on new data:")
+print(predictions)
+
+
+And that's it! You have successfully trained a model, tracked its entire lifecycle with MLflow in Databricks, and loaded it back for inference. 🚀
