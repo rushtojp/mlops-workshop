@@ -1,0 +1,7 @@
+installation steps of mlflow in localhost
+
+from vscode terminal . type
+
+C:\Users\DELL> pip install mlflow
+
+C:\Users\DELL> mlflow ui
