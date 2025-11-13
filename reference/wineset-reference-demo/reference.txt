@@ -11,3 +11,8 @@ pip install numpy pandas scikit-learn
 configure conda environment without mlflow
 
 configure conda environment with mlflow
+
+
+# new environment command - conda create --name myenv python=3.10
+
+# activate environment 
