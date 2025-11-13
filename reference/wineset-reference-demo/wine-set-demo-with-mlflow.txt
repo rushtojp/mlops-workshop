@@ -1,0 +1,151 @@
+# --- Import necessary libraries ---
+
+# To ignore potential warnings, keeping the output clean
+import warnings
+# To parse command-line arguments (like alpha and l1_ratio)
+import argparse
+# To log information and errors
+import logging
+# For data manipulation and reading CSV files
+import pandas as pd
+# For numerical operations, especially with arrays
+import numpy as np
+# Import specific metrics from scikit-learn to evaluate the model
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+# To split the data into training and testing sets
+from sklearn.model_selection import train_test_split
+# The machine learning model we will use (ElasticNet is a type of linear regression)
+from sklearn.linear_model import ElasticNet
+# Import the main MLflow library for experiment tracking
+import mlflow
+# Import the scikit-learn integration for MLflow to log models easily
+import mlflow.sklearn
+
+# --- Basic Setup ---
+
+# Configure logging to show messages at the WARN level or higher
+logging.basicConfig(level=logging.WARN)
+# Get a logger instance for this specific script
+logger = logging.getLogger(__name__)
+
+# --- Command-Line Argument Parsing ---
+
+# Create an ArgumentParser object to handle command-line inputs
+parser = argparse.ArgumentParser()
+# Add an argument for '--alpha' (a hyperparameter for ElasticNet)
+# 'type=float' means it will be read as a floating-point number
+# 'required=False' means the script can run without it
+# 'default=0.7' is the value used if --alpha is not provided
+parser.add_argument("--alpha", type=float, required=False, default=0.7)
+# Add an argument for '--l1_ratio' (another hyperparameter for ElasticNet)
+parser.add_argument("--l1_ratio", type=float, required=False, default=0.7)
+# Parse the arguments provided when the script is run
+args = parser.parse_args()
+
+# --- Helper Function ---
+
+# Define a function to calculate evaluation metrics
+def eval_metrics(actual, pred):
+    # Calculate Root Mean Squared Error
+    rmse = np.sqrt(mean_squared_error(actual, pred))
+    # Calculate Mean Absolute Error
+    mae = mean_absolute_error(actual, pred)
+    # Calculate R-squared (coefficient of determination)
+    r2 = r2_score(actual, pred)
+    # Return the three calculated metrics
+    return rmse, mae, r2
+
+
+# --- Main Execution Block ---
+
+# This ensures the code inside only runs when the script is executed directly
+# (not when imported as a module)
+if __name__ == "__main__":
+    # Suppress all warnings
+    warnings.filterwarnings("ignore")
+    # Set a random seed for numpy to ensure a consistent data split
+    # This makes the experiment reproducible
+    np.random.seed(40)
+
+    # --- Data Loading and Preparation ---
+
+    # Read the dataset from a local CSV file into a pandas DataFrame
+    data = pd.read_csv("red-wine-quality.csv")
+
+    # [Note: This line seems to just re-save the file. It's often used in MLflow
+    # examples to log the data as an "artifact," but here it just saves to a /data directory.]
+    # Let's assume the 'data/' directory exists.
+    # data.to_csv("data/red-wine-quality.csv", index=False)
+
+    # Split the DataFrame into two separate sets: 75% for training, 25% for testing
+    train, test = train_test_split(data)
+
+    # Prepare the data for the model
+    # 'train_x' gets all columns from the training set *except* 'quality'
+    train_x = train.drop(["quality"], axis=1)
+    # 'test_x' gets all columns from the test set *except* 'quality'
+    test_x = test.drop(["quality"], axis=1)
+    # 'train_y' gets *only* the 'quality' column from the training set (this is the target)
+    train_y = train[["quality"]]
+    # 'test_y' gets *only* the 'quality' column from the test set (the "ground truth" for evaluation)
+    test_y = test[["quality"]]
+
+    # --- MLflow Experiment Setup ---
+
+    # Get the hyperparameters from the parsed arguments
+    alpha = args.alpha
+    l1_ratio = args.l1_ratio
+
+    # Set the name of the MLflow experiment.
+    # If "experment_1" (typo intended as in code) doesn't exist, MLflow will create it.
+    exp = mlflow.set_experiment(experiment_name="experment_1")
+
+    # --- Model Training and MLflow Logging ---
+
+    # Start a new MLflow "run" within the specified experiment.
+    # All parameters, metrics, and artifacts logged inside this 'with' block
+    # will be associated with this single run.
+    with mlflow.start_run(experiment_id=exp.experiment_id):
+        
+        # --- Model Training ---
+        
+        # Create an ElasticNet model instance with the specified hyperparameters
+        # 'random_state=42' ensures the model's internal randomness is reproducible
+        lr = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, random_state=42)
+        # Train the model ("fit" it) using the training features (train_x) and training target (train_y)
+        lr.fit(train_x, train_y)
+
+        # --- Model Evaluation ---
+
+        # Use the trained model to make predictions on the *test* data
+        predicted_qualities = lr.predict(test_x)
+
+        # Calculate the performance metrics by comparing predictions to the actual values
+        (rmse, mae, r2) = eval_metrics(test_y, predicted_qualities)
+
+        # --- Local Printing ---
+
+        # Print the results to the console
+        print("Elasticnet model (alpha={:f}, l1_ratio={:f}):".format(alpha, l1_ratio))
+        print("  RMSE: %s" % rmse)
+        print("  MAE: %s" % mae)
+        print("  R2: %s" % r2)
+
+        # --- Logging to MLflow Server ---
+
+        # Log the hyperparameters used for this run
+        mlflow.log_param("alpha", alpha)
+        mlflow.log_param("l1_ratio", l1_ratio)
+
+        # Log the resulting metrics
+        mlflow.log_metric("rmse", rmse)
+        mlflow.log_metric("r2", r2)
+        mlflow.log_metric("mae", mae)
+
+        # Log the trained model itself.
+        # 'mlflow.sklearn.log_model' saves the model in a format MLflow understands.
+        # "mymodel" is the name of the folder where the model will be saved within the run's artifacts.
+        mlflow.sklearn.log_model(lr, "mymodel")
+
+# After the script finishes, you can type 'mlflow ui' in your terminal
+# to see a web page with the results of this run and compare it to others.
