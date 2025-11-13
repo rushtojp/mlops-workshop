@@ -1,0 +1,13 @@
+Wine-dataset
+
+https://github.com/rushtojp/wine-dataset
+
+https://www.anaconda.com/download
+
+install numpy, pandas and scikit-learn
+
+pip install numpy pandas scikit-learn
+
+configure conda environment without mlflow
+
+configure conda environment with mlflow
